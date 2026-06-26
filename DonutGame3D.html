@@ -225,7 +225,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT GAME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.3</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.4</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -799,7 +799,7 @@ function mkEnemies(wave,waveType){
     const tier=tiers[Math.min(Math.floor(i/3+(wave>3?1:0)),tiers.length-1)];
     const aBase=-Math.PI*0.5,aRange=waveType==='defend'?Math.PI:ENEMY_BASE_ARC*0.8;
     const a=aBase+(Math.random()-0.5)*aRange;
-    return{...tier,maxHP:tier.hp,active:false,attackCooldown:0,spawnDelay:i*10,x:CX+Math.cos(a)*(R-22),y:CY+Math.sin(a)*(R-22)};
+    return{...tier,maxHP:tier.hp,active:false,attackCooldown:0,spawnDelay:i*5,x:CX+Math.cos(a)*(R-22),y:CY+Math.sin(a)*(R-22)};
   });
 }
 let difficulty='medium';
@@ -820,7 +820,8 @@ function mkBoss(wave){
   const names={10:'Dark Lord',20:'The Nightmare',30:'Doom Lord'};
   const colors={10:'#4B0082',20:'#8B0000',30:'#111111'};
   const r=55+tier*8;
-  const bossScale=wave===10?0.9:1.0;
+  const diffBossScale=difficulty==='easy'?1.1:difficulty==='medium'?1.25:1.5;
+  const bossScale=(wave===10?0.9:1.0)*diffBossScale;
   const hp=Math.round((3000+wave*800)*em*bossScale);
   return [{
     name:names[wave]||'Boss Evil',hp,maxHP:hp,
