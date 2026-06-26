@@ -230,7 +230,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT <span onclick="godCheat()" style="cursor:pointer;user-select:none">G</span>AME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.6</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.7</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -265,6 +265,7 @@
 </div>
 <div id="donut-toast"></div>
 <div id="wave-toast"></div>
+<canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:90;display:none;"></canvas>
 <div id="log"></div>
 <div id="btns">
   <button class="game-btn" id="btn-shop" onclick="openShop(0)">🏪 Shop</button>
@@ -313,11 +314,18 @@ const DonutAudio = (() => {
   const BOSS_BAS=[[G3,BB],[_,BB],[D3,BB],[_,BB],[Eb3,BB],[_,BB],[D3,BB],[_,BB],[G3,BB],[_,BB],[D3,BB],[_,BB],[Bb3,BB],[_,BB],[D3,BH]];
   function scheduleBossDrums(startT,bars){for(let bar=0;bar<bars;bar++)for(let beat=0;beat<4;beat++){const t=startT+(bar*4+beat)*BB;const ko=ctx.createOscillator(),kg=ctx.createGain();ko.frequency.setValueAtTime(150,t);ko.frequency.exponentialRampToValueAtTime(28,t+0.2);kg.gain.setValueAtTime(0.75,t);kg.gain.exponentialRampToValueAtTime(0.001,t+0.22);ko.connect(kg);kg.connect(musicGain);ko.start(t);ko.stop(t+0.25);if(beat===1||beat===3){noise(t,0.1,0.3,1000,6000,musicGain);playNote(190,'sine',t,0.07,0.2,musicGain);}for(let h=0;h<2;h++)noise(t+h*BE,0.02,0.06,9000,18000,musicGain);}}
   function scheduleBossLoop(startT){if(!bossMusicPlaying)return;const dur=scheduleTrack(BOSS_MEL,'sawtooth',0.45,musicGain,startT);scheduleTrack(BOSS_BAS,'sawtooth',0.55,musicGain,startT);scheduleBossDrums(startT,5);bossLoopTimer=setTimeout(()=>scheduleBossLoop(startT+dur),(dur-0.5)*1000);}
+  // Victory music — C major, 160 BPM, bright triangle wave
+  const VB=60/160,VH=VB*2,VE=VB/2,C6=C5*2,B5=B4*2;
+  const WIN_MEL=[[C5,VE],[E5,VE],[G5,VE],[C6,VH],[_,VE],[G5,VE],[A5,VE],[G5,VE],[E5,VE],[C5,VH],[E5,VE],[G5,VE],[A5,VE],[B5,VE],[C6,VH],[G5,VE],[E5,VE],[C5,VE],[G4,VE],[C5,VH]];
+  const WIN_BAS=[[C4,VH],[G3,VH],[C4,VH],[G3,VH],[C4,VH],[G3,VH],[C4,VH*2]];
+  let winMusicPlaying=false,winLoopTimer=null;
+  function scheduleWinLoop(startT){if(!winMusicPlaying)return;const dur=scheduleTrack(WIN_MEL,'triangle',0.5,musicGain,startT);scheduleTrack(WIN_BAS,'sine',0.35,musicGain,startT);winLoopTimer=setTimeout(()=>scheduleWinLoop(startT+dur),(dur-0.5)*1000);}
   return{
     init,resume(){if(ctx&&ctx.state==='suspended')ctx.resume();},
     startMusic(){init();if(musicPlaying)return;if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}bossMusicPlaying=false;musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.28,ctx.currentTime);musicPlaying=true;scheduleLoop(ctx.currentTime+0.1);},
     startBossMusic(){init();if(bossMusicPlaying)return;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}musicPlaying=false;musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.28,ctx.currentTime);bossMusicPlaying=true;scheduleBossLoop(ctx.currentTime+0.1);},
-    stopMusic(){musicPlaying=false;bossMusicPlaying=false;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}if(ctx){musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.001,ctx.currentTime);}},
+    startWinMusic(){init();if(winMusicPlaying)return;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}musicPlaying=false;bossMusicPlaying=false;musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.28,ctx.currentTime);winMusicPlaying=true;scheduleWinLoop(ctx.currentTime+0.1);},
+    stopMusic(){musicPlaying=false;bossMusicPlaying=false;winMusicPlaying=false;if(loopTimer){clearTimeout(loopTimer);loopTimer=null;}if(bossLoopTimer){clearTimeout(bossLoopTimer);bossLoopTimer=null;}if(winLoopTimer){clearTimeout(winLoopTimer);winLoopTimer=null;}if(ctx){musicGain.gain.cancelScheduledValues(ctx.currentTime);musicGain.gain.setValueAtTime(0.001,ctx.currentTime);}},
     toggleMute(){init();muted=!muted;masterGain.gain.setTargetAtTime(muted?0:0.55,ctx.currentTime,0.05);return muted;},
     sfxCoin(){init();const t=ctx.currentTime;[784,988,1319].forEach((f,i)=>playNote(f,'square',t+i*0.06,0.09,0.2,sfxGain));},
     sfxBuy(){init();const t=ctx.currentTime;playNote(392,'sine',t,0.07,0.38,sfxGain);playNote(523,'sine',t+0.07,0.07,0.38,sfxGain);playNote(659,'sine',t+0.14,0.07,0.38,sfxGain);playNote(784,'sine',t+0.14,0.2,0.28,sfxGain);},
@@ -714,11 +722,10 @@ document.addEventListener('click',()=>{
   if(_toastOpen){document.getElementById('donut-toast').classList.remove('show');_toastOpen=false;}
 });
 function godCheat(){
-  if(shopEverVisited){logMsg('Cheat unavailable after visiting the shop.','bad');return;}
-  if(godCheatCount>=3){logMsg('God limit reached!','bad');return;}
+  if(shopEverVisited||godCheatCount>=3)return;
   godCheatCount++;
   const p=defaultPos();state.myDonuts.push(mkDonut('god',p.x,p.y));
-  logMsg('✨ God Donut! ('+godCheatCount+'/3)','good');updateHUD();
+  logMsg('✨ God Donut!','good');updateHUD();
 }
 function buyFromShop(id){const t=DONUT_TYPES.find(d=>d.id===id);if(!t||state.coins<t.cost){logMsg('Not enough coins!','bad');return;}state.coins-=t.cost;const p=defaultPos();state.myDonuts.push(mkDonut(id,p.x,p.y));DonutAudio.sfxBuy();logMsg(`Bought ${t.name}!`,'good');updateHUD();openShop();}
 function sellFromShop(id){
@@ -880,7 +887,7 @@ function tickBoss(live){
     visitedShopThisWave=false;
     document.getElementById('boss-bar-wrap').style.display='none';
     if(state.wave>=30){
-      state.gameOver=true;DonutAudio.stopMusic();
+      state.gameOver=true;DonutAudio.stopMusic();DonutAudio.startWinMusic();startConfetti();
       logMsg('🏆 YOU WIN! The Doom Lord is defeated!','good');
       document.getElementById('victory-overlay').classList.add('show');
     }else{
@@ -1198,15 +1205,46 @@ function resetGame(){
   visitedShopThisWave=false;shopEverVisited=false;godCheatCount=0;
   spawnIdx=0;nextNonBossType='defend';spawnBlocks();DonutAudio.stopMusic();
   document.getElementById('gameover-overlay').classList.remove('show');
-  document.getElementById('victory-overlay').classList.remove('show');
-  logMsg('New game! Wave 1 = DEFEND. Wave 2 = ATTACK. Alternates!','info');
+  document.getElementById('victory-overlay').classList.remove('show');stopConfetti();
+  logMsg('New game! Wave 1 = DEFEND. Wave 2 = ATTACK. Every 10th wave is a ☠️ BOSS. Survive all 30!','info');
   showBanner('🍩 NEW GAME!');updateHUD();
 }
 function toggleMute(){const m=DonutAudio.toggleMute();document.getElementById('mute-btn').textContent=m?'🔇':'🔊';}
 
+// ── Confetti ──────────────────────────────────────────────────────────────────
+const confettiCanvas=document.getElementById('confetti-canvas');
+const confettiCtx=confettiCanvas.getContext('2d');
+let confettiPieces=[],confettiAnimId=null;
+function startConfetti(){
+  confettiCanvas.width=window.innerWidth;confettiCanvas.height=window.innerHeight;
+  confettiCanvas.style.display='block';
+  confettiPieces=Array.from({length:180},()=>({
+    x:Math.random()*window.innerWidth,y:Math.random()*-200,
+    w:7+Math.random()*9,h:3+Math.random()*5,
+    r:Math.random()*Math.PI*2,dr:(Math.random()-0.5)*0.12,
+    dx:(Math.random()-0.5)*2.5,dy:2.5+Math.random()*3,
+    color:`hsl(${Math.floor(Math.random()*360)},90%,62%)`
+  }));
+  function tick(){
+    confettiCtx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+    confettiPieces.forEach(p=>{
+      p.x+=p.dx;p.y+=p.dy;p.r+=p.dr;
+      if(p.y>confettiCanvas.height+20)p.y=-20;
+      confettiCtx.save();confettiCtx.translate(p.x,p.y);confettiCtx.rotate(p.r);
+      confettiCtx.fillStyle=p.color;confettiCtx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      confettiCtx.restore();
+    });
+    confettiAnimId=requestAnimationFrame(tick);
+  }
+  tick();
+}
+function stopConfetti(){
+  if(confettiAnimId){cancelAnimationFrame(confettiAnimId);confettiAnimId=null;}
+  confettiCanvas.style.display='none';confettiPieces=[];
+}
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function gameLoop(){update();render3D();requestAnimationFrame(gameLoop);}
-logMsg('🍩 Wave 1 = DEFEND your base. Wave 2 = ATTACK theirs. Alternates! Survive all 30 waves to win!','info');
+logMsg('🍩 Wave 1 = DEFEND your base. Wave 2 = ATTACK theirs. Alternates! Every 10th wave is a ☠️ BOSS. Survive all 30 to win!','info');
 updateHUD();
 gameLoop();
 </script>
