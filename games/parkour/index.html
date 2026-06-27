@@ -199,7 +199,7 @@
 <div id="menu" class="screen active">
   <div class="logo">🍌</div>
   <h1>PARKOUR</h1>
-  <p class="tagline">20 levels · don't look down</p>
+  <p class="tagline">20 levels · don't look down · v0.1</p>
   <div class="btn-row">
     <button class="btn" id="btn-play">▶ Play</button>
     <button class="btn secondary" id="btn-char">🎨 Customise</button>
@@ -960,9 +960,9 @@ function stepPlayer(dt){
     if (pd){ camPitch = clamp(camPitch + pd*PITCH_RATE*dt, PITCH_MIN, PITCH_MAX); showCamToast(); }
   }
 
-  // turn
-  if (keys['arrowleft']||keys['a'])  yaw -= TURN_SPEED*dt;
-  if (keys['arrowright']||keys['d']) yaw += TURN_SPEED*dt;
+  // turn (left/right relative to what the player sees on screen)
+  if (keys['arrowleft']||keys['a'])  yaw += TURN_SPEED*dt;
+  if (keys['arrowright']||keys['d']) yaw -= TURN_SPEED*dt;
 
   const up = keys['arrowup']||keys['w'], down = keys['arrowdown']||keys['s'];
 
