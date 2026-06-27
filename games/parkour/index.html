@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parkour — Erratic Banana Games</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #0d0d12;
+    color: #f0e6d3;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    user-select: none;
+  }
+  #game-canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* ── Generic overlay screens ───────────────────────────────────────────── */
+  .screen {
+    position: fixed; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    z-index: 20;
+  }
+  .screen.active { display: flex; }
+  .screen.dim { background: rgba(8,8,14,0.72); backdrop-filter: blur(3px); }
+
+  .logo { font-size: 2.6em; margin-bottom: 4px; }
+  h1 {
+    font-size: 2.6em; font-weight: 900; letter-spacing: 0.06em;
+    color: #f9e04b; text-shadow: 0 0 40px #f9e04b66; margin-bottom: 4px;
+  }
+  .tagline { font-size: 0.95em; color: #9a9; margin-bottom: 34px; letter-spacing: 0.08em; }
+
+  .btn {
+    background: #f4a43a; color: #1a1208; border: none; border-radius: 12px;
+    padding: 13px 34px; font-size: 1.05em; font-weight: 800; letter-spacing: 0.04em;
+    cursor: pointer; transition: transform .12s, box-shadow .12s, background .12s;
+    box-shadow: 0 6px 0 #b9721f;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #b9721f; background: #ffba52; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b9721f; }
+  .btn.secondary {
+    background: #2a2a36; color: #f0e6d3; box-shadow: 0 6px 0 #16161e;
+  }
+  .btn.secondary:hover { background: #363645; }
+  .btn-row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+  .panel {
+    background: rgba(20,20,28,0.92); border: 1px solid #333;
+    border-radius: 16px; padding: 26px 30px; max-width: 720px; width: 100%;
+  }
+  .panel h2 { color: #f9e04b; font-size: 1.5em; margin-bottom: 14px; text-align: center; letter-spacing: 0.04em; }
+  .hint { color: #8a8a94; font-size: 0.85em; line-height: 1.7; text-align: center; }
+  .hint b { color: #f4a43a; }
+
+  /* ── Level select grid ─────────────────────────────────────────────────── */
+  #level-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 20px 0;
+  }
+  .lvl {
+    position: relative; aspect-ratio: 1; border-radius: 12px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 2px solid rgba(255,255,255,0.18); font-weight: 800; color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8); transition: transform .12s, box-shadow .12s;
+    overflow: hidden;
+  }
+  .lvl:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 8px 18px rgba(0,0,0,0.45); }
+  .lvl .num { font-size: 1.5em; }
+  .lvl .nm { font-size: 0.6em; font-weight: 600; opacity: 0.92; margin-top: 2px; padding: 0 4px; text-align: center; }
+  .lvl .best { font-size: 0.55em; font-weight: 600; opacity: 0.85; margin-top: 2px; }
+  .lvl.locked { cursor: not-allowed; filter: grayscale(0.85) brightness(0.45); }
+  .lvl.locked:hover { transform: none; box-shadow: none; }
+  .lvl .lock { position: absolute; font-size: 1.4em; opacity: 0.85; }
+  .lvl .check { position: absolute; top: 4px; right: 6px; font-size: 0.8em; }
+
+  /* ── Character screen ──────────────────────────────────────────────────── */
+  #char-panel { max-width: 460px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 8px 0 4px; }
+  .sw {
+    width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
+    border: 3px solid transparent; transition: transform .1s;
+  }
+  .sw:hover { transform: scale(1.12); }
+  .sw.sel { border-color: #f9e04b; box-shadow: 0 0 12px #f9e04b88; }
+  .sw.none {
+    background: #222 !important; color: #888; display: flex; align-items: center;
+    justify-content: center; font-size: 0.7em; font-weight: 700;
+  }
+  .sw.locked { opacity: 0.25; cursor: not-allowed; }
+  .label { font-size: 0.8em; color: #bbb; margin: 16px 0 4px; letter-spacing: 0.06em; text-transform: uppercase; }
+  #custom-color { width: 40px; height: 34px; border: none; border-radius: 8px; background: none; cursor: pointer; vertical-align: middle; }
+
+  /* ── In-game HUD ───────────────────────────────────────────────────────── */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: none; align-items: center; justify-content: space-between;
+    padding: 12px 18px; pointer-events: none;
+    font-weight: 700; text-shadow: 0 1px 4px #000;
+  }
+  #hud.active { display: flex; }
+  .hud-pill {
+    background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 30px; padding: 7px 16px; display: flex; align-items: center; gap: 10px;
+    backdrop-filter: blur(4px); pointer-events: auto;
+  }
+  .hud-pill .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.4); }
+  #hud .accent { color: #f9e04b; }
+  #hud-right { gap: 8px; display: flex; }
+  .icon-btn {
+    background: rgba(10,10,16,0.55); border: 1px solid rgba(255,255,255,0.12);
+    color: #f0e6d3; border-radius: 10px; width: 40px; height: 40px; font-size: 1.1em;
+    cursor: pointer; pointer-events: auto; backdrop-filter: blur(4px); font-weight: 700;
+  }
+  .icon-btn:hover { background: rgba(244,164,58,0.35); }
+
+  #controls-hint {
+    position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 10; display: none; font-size: 0.78em; color: #cfcfd6;
+    background: rgba(10,10,16,0.5); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 24px; padding: 7px 18px; text-shadow: 0 1px 3px #000;
+    backdrop-filter: blur(4px); white-space: nowrap;
+  }
+  #controls-hint.active { display: block; }
+  #controls-hint b { color: #f9e04b; }
+
+  /* ── Fail / win flash & banners ────────────────────────────────────────── */
+  #flash {
+    position: fixed; inset: 0; z-index: 15; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(200,30,30,0.55) 100%);
+    transition: opacity .15s;
+  }
+  #flash.show { opacity: 1; }
+
+  #banner {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 16; text-align: center; pointer-events: none; display: none;
+  }
+  #banner.active { display: block; }
+  #banner .big { font-size: 2.4em; font-weight: 900; letter-spacing: 0.04em; text-shadow: 0 3px 14px #000; }
+  #banner .sub { font-size: 1em; color: #ddd; margin-top: 6px; text-shadow: 0 2px 8px #000; }
+
+  /* ── Level complete overlay ────────────────────────────────────────────── */
+  #complete-panel { max-width: 420px; text-align: center; }
+  #complete-panel .armour-icon {
+    width: 96px; height: 96px; margin: 6px auto 12px; border-radius: 18px;
+    display: flex; align-items: center; justify-content: center; font-size: 3em;
+    box-shadow: 0 0 40px currentColor;
+  }
+  #complete-panel .time { color: #cfcfd6; font-size: 0.95em; margin: 6px 0 18px; }
+
+  /* ── Fade between levels (ladder climb) ────────────────────────────────── */
+  #fade {
+    position: fixed; inset: 0; z-index: 18; pointer-events: none;
+    background: #0a0a10; opacity: 0; transition: opacity 0.35s ease;
+  }
+  /* ── Camera-angle toast ────────────────────────────────────────────────── */
+  #cam-toast {
+    position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%);
+    z-index: 12; font-size: 0.85em; font-weight: 700; color: #f9e04b;
+    background: rgba(10,10,16,0.6); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px; padding: 6px 16px; text-shadow: 0 1px 3px #000;
+    backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  #cam-toast.show { opacity: 1; }
+
+  @media (max-width: 560px) {
+    #level-grid { grid-template-columns: repeat(4, 1fr); }
+    h1 { font-size: 2em; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+
+<!-- MAIN MENU -->
+<div id="menu" class="screen active">
+  <div class="logo">🍌</div>
+  <h1>PARKOUR</h1>
+  <p class="tagline">20 levels · don't look down</p>
+  <div class="btn-row">
+    <button class="btn" id="btn-play">▶ Play</button>
+    <button class="btn secondary" id="btn-char">🎨 Customise</button>
+  </div>
+  <div class="hint" style="margin-top:28px; max-width:440px;">
+    Hop block to block to the glowing finish. Miss a jump and you restart the level.<br>
+    Each level you clear earns you <b>armour</b> in that level's colour.
+  </div>
+</div>
+
+<!-- LEVEL SELECT -->
+<div id="select" class="screen dim">
+  <div class="panel">
+    <h2>Select a Level</h2>
+    <div id="level-grid"></div>
+    <div class="btn-row">
+      <button class="btn secondary" id="btn-back-menu">← Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHARACTER -->
+<div id="char" class="screen dim">
+  <div class="panel" id="char-panel">
+    <h2>Your Character</h2>
+    <div class="label">Body colour</div>
+    <div class="swatches" id="body-swatches"></div>
+    <div style="text-align:center; margin-top:8px;">
+      <span class="hint">or pick custom:</span>
+      <input type="color" id="custom-color" value="#5ec8f0">
+    </div>
+    <div class="label">Armour (earned by clearing levels)</div>
+    <div class="swatches" id="armour-swatches"></div>
+    <div class="btn-row" style="margin-top:22px;">
+      <button class="btn secondary" id="btn-char-back">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- IN-GAME HUD -->
+<div id="hud">
+  <div class="hud-pill">
+    <span class="swatch" id="hud-swatch"></span>
+    <span>Level <span class="accent" id="hud-level">1</span></span>
+    <span id="hud-name" style="color:#cfcfd6;font-weight:600;"></span>
+  </div>
+  <div class="hud-pill">
+    <span>🏁 <span class="accent" id="hud-progress">0/0</span></span>
+    <span>⏱ <span id="hud-time">0.0</span>s</span>
+    <span>💀 <span id="hud-attempts">0</span></span>
+  </div>
+  <div id="hud-right">
+    <button class="icon-btn" id="hud-cam" title="Toggle camera (C)">👁</button>
+    <button class="icon-btn" id="hud-restart" title="Restart (R)">⟳</button>
+    <button class="icon-btn" id="hud-exit" title="Levels (Esc)">≡</button>
+  </div>
+</div>
+
+<div id="controls-hint">
+  <b>↑↓</b> move &nbsp; <b>←→</b> turn &nbsp; <b>Space</b> jump &nbsp; <b>[ ]</b> tilt &nbsp; <b>C</b> view &nbsp; <b>R</b> restart
+</div>
+
+<div id="cam-toast"></div>
+<div id="flash"></div>
+<div id="fade"></div>
+<div id="banner"></div>
+
+<!-- LEVEL COMPLETE -->
+<div id="complete" class="screen dim">
+  <div class="panel" id="complete-panel">
+    <h2 id="complete-title">Level Complete!</h2>
+    <div class="armour-icon" id="complete-armour">🛡</div>
+    <div id="complete-msg">You earned <b>Red</b> armour!</div>
+    <div class="time" id="complete-time"></div>
+    <div class="btn-row">
+      <button class="btn" id="btn-next">Next Level →</button>
+      <button class="btn secondary" id="btn-replay">Replay</button>
+      <button class="btn secondary" id="btn-levels">Levels</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════════
+   PARKOUR — Erratic Banana Games
+   3D Minecraft-style parkour. 20 deterministic procedural levels.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+// ── Level colours (index 0 → Level 1) ──────────────────────────────────────
+const LEVELS = [
+  {name:'Red',          hex:'#e03b2f'},
+  {name:'Orange',       hex:'#ee7a1e'},
+  {name:'Yellow',       hex:'#f4d03f'},
+  {name:'Light Green',  hex:'#7ed957'},
+  {name:'Dark Green',   hex:'#2e8b3d'},
+  {name:'Light Blue',   hex:'#5ec8f0'},
+  {name:'Dark Blue',    hex:'#2b59c3'},
+  {name:'Light Purple', hex:'#b07ff0'},
+  {name:'Dark Purple',  hex:'#7a3fb0'},
+  {name:'Pink',         hex:'#f47ab5'},
+  {name:'Beige',        hex:'#e8d3a8'},
+  {name:'Light Brown',  hex:'#b07b4f'},
+  {name:'Dark Brown',   hex:'#6b4226'},
+  {name:'Black',        hex:'#262626'},
+  {name:'Light Grey',   hex:'#c0c0c0'},
+  {name:'Dark Grey',    hex:'#6b6b6b'},
+  {name:'White',        hex:'#f2f2f2'},
+  {name:'Bronze',       hex:'#cd7f32'},
+  {name:'Silver',       hex:'#cfd6dd'},
+  {name:'Gold',         hex:'#f4c542'},
+];
+const TOTAL_LEVELS = LEVELS.length;
+const isMetal = (i) => i >= 17; // bronze, silver, gold
+
+// ── Physics constants ───────────────────────────────────────────────────────
+const MOVE_SPEED   = 7.0;    // horizontal units / sec
+const TURN_SPEED   = 3.0;    // radians / sec
+const GRAVITY      = 30.0;   // units / sec^2 (magnitude)
+const JUMP_V       = 12.0;   // first jump up-velocity
+const DJUMP_V      = 11.0;   // double jump up-velocity
+const PFR          = 0.34;   // player footprint half-width
+const EYE          = 1.45;   // first-person eye height
+const TOWER_H      = 9.0;    // height of the inter-level ladder tower
+const CLIMB_SPEED  = 6.0;    // ladder climb speed (units/sec)
+const CAM_BOOM     = 7.8;    // third-person camera boom length
+const PITCH_MIN    = 0.30;   // camera pitch limits (radians)
+const PITCH_MAX    = 1.32;
+const PITCH_RATE   = 1.15;   // pitch change speed (radians/sec)
+
+const JUMP_H = (JUMP_V*JUMP_V)/(2*GRAVITY); // single jump apex height
+
+// Max single-jump horizontal reach to land at height delta dy (descending root)
+function reachSingle(dy){
+  const disc = JUMP_V*JUMP_V - 2*GRAVITY*dy;
+  if (disc <= 0) return 0;            // can't get that high
+  const t = (JUMP_V + Math.sqrt(disc)) / GRAVITY;
+  return MOVE_SPEED * t;
+}
+// Optimal double-jump horizontal reach (second jump at apex of first)
+function reachDouble(dy){
+  const H1 = JUMP_H, H2 = (DJUMP_V*DJUMP_V)/(2*GRAVITY);
+  const tUp1 = JUMP_V/GRAVITY, tUp2 = DJUMP_V/GRAVITY;
+  const peak = H1 + H2;
+  const tDown = Math.sqrt(Math.max(0, 2*(peak - dy)/GRAVITY));
+  return MOVE_SPEED * (tUp1 + tUp2 + tDown);
+}
+
+// ── Tiny helpers ────────────────────────────────────────────────────────────
+const lerp  = (a,b,t) => a + (b-a)*t;
+const clamp = (v,a,b) => v < a ? a : (v > b ? b : v);
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shade(hex, amt){ // amt -1..1
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  if (amt >= 0){ r=lerp(r,255,amt); g=lerp(g,255,amt); b=lerp(b,255,amt); }
+  else { const k=1+amt; r*=k; g*=k; b*=k; }
+  return (Math.round(r)<<16)|(Math.round(g)<<8)|Math.round(b);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SAVE
+// ════════════════════════════════════════════════════════════════════════════
+const SAVE_KEY = 'eb_parkour_v1';
+const defaultSave = () => ({
+  unlocked: 1,                          // highest unlocked level (1..20)
+  armour: Array(TOTAL_LEVELS).fill(false),
+  best: Array(TOTAL_LEVELS).fill(0),    // best time seconds (0 = none)
+  color: '#5ec8f0',                     // body colour
+  equipped: 0,                          // 0 = none, else level number 1..20
+  camPitch: 0.72,                       // third-person camera angle (radians)
+});
+let save = loadSave();
+function loadSave(){
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (!s) return defaultSave();
+    const d = defaultSave();
+    return Object.assign(d, s, {
+      armour: (s.armour||d.armour).slice(0,TOTAL_LEVELS),
+      best: (s.best||d.best).slice(0,TOTAL_LEVELS),
+    });
+  } catch(e){ return defaultSave(); }
+}
+function persist(){ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+
+// ════════════════════════════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ════════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
+
+// Two scenes: gameplay + menu preview
+const gameScene = new THREE.Scene();
+const menuScene = new THREE.Scene();
+
+// lights for gameplay
+const gAmb = new THREE.HemisphereLight(0xffffff, 0x556070, 1.05); gameScene.add(gAmb);
+const gSun = new THREE.DirectionalLight(0xfff4e0, 2.2);
+gSun.castShadow = true;
+gSun.shadow.mapSize.set(2048, 2048);
+gSun.shadow.camera.near = 1; gSun.shadow.camera.far = 80;
+gSun.shadow.camera.left = -22; gSun.shadow.camera.right = 22;
+gSun.shadow.camera.top = 22; gSun.shadow.camera.bottom = -22;
+gSun.shadow.bias = -0.0004;
+gameScene.add(gSun);
+gameScene.add(gSun.target);
+
+// lights for menu preview
+const mAmb = new THREE.HemisphereLight(0xffffff, 0x44485a, 1.2); menuScene.add(mAmb);
+const mSun = new THREE.DirectionalLight(0xfff4e0, 2.0); mSun.position.set(4,8,6);
+mSun.castShadow = true; mSun.shadow.mapSize.set(1024,1024);
+mSun.shadow.camera.near=1; mSun.shadow.camera.far=30;
+mSun.shadow.camera.left=-5; mSun.shadow.camera.right=5; mSun.shadow.camera.top=5; mSun.shadow.camera.bottom=-5;
+menuScene.add(mSun); menuScene.add(mSun.target);
+
+menuScene.background = makeSky('#5ec8f0');
+// menu pedestal
+{
+  const ped = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.4, 1.6, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color: 0x2a2a38, roughness: 0.9 })
+  );
+  ped.position.y = -0.25; ped.receiveShadow = true; menuScene.add(ped);
+}
+
+// ── Sky background texture (tinted per level) ───────────────────────────────
+function makeSky(hex){
+  const c = document.createElement('canvas'); c.width = 16; c.height = 256;
+  const ctx = c.getContext('2d');
+  const top = '#'+shade(hex, 0.05).toString(16).padStart(6,'0');
+  const g = ctx.createLinearGradient(0,0,0,256);
+  // blend a pleasant sky-blue with the level tint
+  g.addColorStop(0, mix('#3b6fb0', hex, 0.18));
+  g.addColorStop(0.55, mix('#8fc0ec', hex, 0.16));
+  g.addColorStop(1, mix('#dfeefb', hex, 0.10));
+  ctx.fillStyle = g; ctx.fillRect(0,0,16,256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function mix(a,b,t){
+  const pa=parseInt(a.slice(1),16), pb=parseInt(b.slice(1),16);
+  const r=lerp((pa>>16)&255,(pb>>16)&255,t), g=lerp((pa>>8)&255,(pb>>8)&255,t), bl=lerp(pa&255,pb&255,t);
+  return '#'+((Math.round(r)<<16)|(Math.round(g)<<8)|Math.round(bl)).toString(16).padStart(6,'0');
+}
+
+// ── Minecraft-ish block texture per colour ──────────────────────────────────
+const blockTexCache = {};
+function blockTexture(hex){
+  if (blockTexCache[hex]) return blockTexCache[hex];
+  const S = 16, c = document.createElement('canvas'); c.width=c.height=S;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = hex; ctx.fillRect(0,0,S,S);
+  // pixel noise
+  for (let y=0;y<S;y++) for (let x=0;x<S;x++){
+    const r = Math.random();
+    if (r < 0.30){
+      const a = (r<0.15) ? -0.16 : 0.12;
+      ctx.fillStyle = 'rgba('+(a<0?0:255)+','+(a<0?0:255)+','+(a<0?0:255)+','+Math.abs(a)+')';
+      ctx.fillRect(x,y,1,1);
+    }
+  }
+  // bevel: light top/left, dark bottom/right
+  ctx.fillStyle='rgba(255,255,255,0.22)'; ctx.fillRect(0,0,S,1); ctx.fillRect(0,0,1,S);
+  ctx.fillStyle='rgba(0,0,0,0.28)'; ctx.fillRect(0,S-1,S,1); ctx.fillRect(S-1,0,1,S);
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+  t.colorSpace = THREE.SRGBColorSpace;
+  blockTexCache[hex] = t;
+  return t;
+}
+
+// ── Text sprite (START / 🍌) ────────────────────────────────────────────────
+function textSprite(txt, color){
+  const c = document.createElement('canvas'); c.width=256; c.height=128;
+  const ctx = c.getContext('2d');
+  ctx.font = 'bold 70px Segoe UI, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth=8; ctx.strokeStyle='rgba(0,0,0,0.85)'; ctx.strokeText(txt,128,64);
+  ctx.fillStyle=color||'#fff'; ctx.fillText(txt,128,64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, transparent:true, depthWrite:false }));
+  sp.scale.set(3,1.5,1);
+  return sp;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CHARACTER  (blocky humanoid, pickable colour, optional armour overlay)
+// ════════════════════════════════════════════════════════════════════════════
+function buildCharacter(){
+  const group = new THREE.Group();
+  const skin = [], armour = [];
+
+  function part(w,h,d, x,y,z, isArmour){
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w,h,d),
+      new THREE.MeshStandardMaterial({ roughness: 0.85 })
+    );
+    m.position.set(x,y,z); m.castShadow = true; m.receiveShadow = true;
+    group.add(m);
+    (isArmour ? armour : skin).push(m);
+    return m;
+  }
+  // body (feet at y=0)
+  part(0.24,0.55,0.26, -0.13,0.275,0);   // left leg
+  part(0.24,0.55,0.26,  0.13,0.275,0);   // right leg
+  part(0.52,0.60,0.30,  0,   0.85, 0);   // torso
+  part(0.17,0.58,0.24, -0.345,0.84,0);   // left arm
+  part(0.17,0.58,0.24,  0.345,0.84,0);   // right arm
+  part(0.46,0.46,0.46,  0,   1.40, 0);   // head
+
+  // armour overlays (slightly larger, hidden by default)
+  const A = 1.16;
+  part(0.24*A,0.55,0.26*A, -0.13,0.275,0, true); // left greave
+  part(0.24*A,0.55,0.26*A,  0.13,0.275,0, true); // right greave
+  part(0.52*A,0.60*A,0.30*A, 0,0.85,0, true);    // chestplate
+  part(0.17*A,0.40,0.24*A, -0.345,0.95,0, true); // left pauldron
+  part(0.17*A,0.40,0.24*A,  0.345,0.95,0, true); // right pauldron
+  part(0.46*A,0.30,0.46*A,  0,1.50,0, true);     // helmet top
+  armour.forEach(m => m.visible = false);
+
+  function setBody(hex){
+    const base = parseInt(hex.slice(1),16);
+    skin.forEach((m,i) => {
+      // legs a touch darker, head a touch lighter for definition
+      const s = (i<2) ? -0.12 : (i===5 ? 0.06 : 0);
+      m.material.color.setHex(shade(hex, s));
+    });
+  }
+  function setArmour(levelIdx){ // levelIdx: -1 none, else 0..19
+    if (levelIdx < 0){ armour.forEach(m => m.visible=false); return; }
+    const hex = LEVELS[levelIdx].hex, metal = isMetal(levelIdx);
+    armour.forEach(m => {
+      m.visible = true;
+      m.material.color.setHex(parseInt(hex.slice(1),16));
+      m.material.roughness = metal ? 0.25 : 0.7;
+      m.material.metalness = metal ? 0.85 : 0.15;
+      m.material.emissive.setHex(metal ? shade(hex,-0.55) : 0x000000);
+    });
+  }
+  return { group, setBody, setArmour };
+}
+
+const menuChar = buildCharacter(); menuChar.group.position.y = 0; menuScene.add(menuChar.group);
+const player   = buildCharacter(); gameScene.add(player.group);
+
+function refreshCharacters(){
+  menuChar.setBody(save.color);  player.setBody(save.color);
+  const idx = save.equipped ? save.equipped-1 : -1;
+  menuChar.setArmour(idx); player.setArmour(idx);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LEVEL GENERATION  (deterministic, guaranteed completable)
+// ════════════════════════════════════════════════════════════════════════════
+function generateLevel(level, origin){      // level: 1..20
+  origin = origin || { x:0, y:0, z:0 };     // world position of the start pad
+  const idx = level - 1;
+  const diff = idx / (TOTAL_LEVELS - 1);    // 0..1
+  const rng = mulberry32(0x1234 + level*92821);
+  const numJumps = Math.round(lerp(10, 30, diff));
+  const canDouble = level >= 10;
+  const pDouble = canDouble ? (0.10 + clamp((level-10)/9, 0, 1) * 0.45) : 0;
+
+  const topSize  = lerp(2.6, 1.0, diff);    // landing pad side length
+  const turnMax  = lerp(0.10, 0.60, diff);  // per-step turn (radians)
+  const HEADING_MAX = 1.0;                   // cone half-angle: keeps course moving forward
+  const stepRng  = lerp(0.18, 0.55, diff) * JUMP_H; // height variation
+
+  const blocks = [];
+  // start pad — generous & safe
+  blocks.push({ x:origin.x, z:origin.z, top:origin.y, size:Math.max(topSize,3.2), isStart:true });
+
+  let heading = 0;            // 0 = +Z forward
+  let cx = origin.x, cz = origin.z, cy = origin.y;
+
+  for (let i=1; i<=numJumps; i++){
+    const f = i / numJumps;            // 0..1 within level — late jumps harder
+    // height delta
+    let dy = (rng()*2 - 1) * stepRng;
+    dy = clamp(dy, -1.3*JUMP_H, 0.5*JUMP_H);
+
+    const requiresDouble = (i > 2) && (rng() < pDouble);
+    let dist;
+    if (requiresDouble){
+      const rS = reachSingle(dy), rD = reachDouble(dy);
+      // strictly beyond single reach, comfortably within double reach
+      dist = lerp(rS*1.12, rD*0.82, 0.5);
+    } else {
+      const gapFactor = clamp(lerp(0.42, 0.84, diff) + (f-0.5)*0.10 + (rng()-0.5)*0.08, 0.35, 0.9);
+      dist = gapFactor * reachSingle(dy);
+    }
+    const sz = clamp(topSize * lerp(1.0, 0.85, rng()), PFR*2 + 0.35, 4);
+    dist = Math.max(dist, sz*0.6 + 1.2); // never overlap previous pad
+
+    // Place block, retrying with a straighter heading if it would overlap an
+    // existing pad. The heading is kept within a forward cone so the course
+    // always advances (z increases) and can never fold back on itself.
+    const baseTurn = (rng()*2 - 1) * turnMax;
+    let best = null;
+    for (let t=0; t<10; t++){
+      const h  = clamp(heading + baseTurn * Math.pow(0.55, t), -HEADING_MAX, HEADING_MAX);
+      const nx = cx + Math.sin(h) * dist;
+      const nz = cz + Math.cos(h) * dist;
+      let ok = true;
+      for (let k=0; k<blocks.length; k++){
+        const b = blocks[k], need = (b.size + sz)/2 + 0.3;
+        if (Math.abs(nx-b.x) < need && Math.abs(nz-b.z) < need){ ok = false; break; }
+      }
+      best = { h, nx, nz };
+      if (ok) break;
+    }
+    heading = best.h; cx = best.nx; cz = best.nz; cy += dy;
+
+    blocks.push({ x:cx, z:cz, top:cy, size:sz, requiresDouble });
+  }
+  const fb = blocks[blocks.length-1];
+  fb.isFinish = true;
+  fb.size = Math.max(fb.size*1.25, 2.4);
+
+  let minTop = Infinity;
+  blocks.forEach(b => { if (b.top < minTop) minTop = b.top; });
+
+  return {
+    level, idx, blocks, numJumps, canDouble, origin,
+    voidY: minTop - 7,
+    finish: { x: fb.x, z: fb.z, top: fb.top, size: fb.size },
+    ladderTopY: fb.top + TOWER_H,
+    climbR: fb.size/2 + 0.4,
+  };
+}
+
+// ── A tower with a ladder inside it (links one level to the next) ───────────
+function buildTower(group, cx, cz, baseY, height, hex){
+  const postMat = new THREE.MeshStandardMaterial({ color: shade(hex,-0.35), roughness:0.85 });
+  const railMat = new THREE.MeshStandardMaterial({ color: shade(hex,-0.55), roughness:0.7 });
+  const half = 1.25, midY = baseY + height/2;
+  // 4 corner posts
+  [[-half,-half],[half,-half],[-half,half],[half,half]].forEach(o => {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.28, height, 0.28), postMat);
+    p.position.set(cx+o[0], midY, cz+o[1]); p.castShadow = true; group.add(p);
+  });
+  // horizontal frame rings
+  const rings = Math.max(2, Math.round(height/3));
+  for (let r=0; r<=rings; r++){
+    const y = baseY + height*(r/rings);
+    const bx = new THREE.Mesh(new THREE.BoxGeometry(2*half+0.28,0.18,0.18), postMat);
+    bx.position.set(cx, y, cz-half); group.add(bx);
+    const bx2 = bx.clone(); bx2.position.set(cx, y, cz+half); group.add(bx2);
+    const bz = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.18,2*half+0.28), postMat);
+    bz.position.set(cx-half, y, cz); group.add(bz);
+    const bz2 = bz.clone(); bz2.position.set(cx+half, y, cz); group.add(bz2);
+  }
+  // ladder up the centre — 2 rails + rungs
+  [-0.32, 0.32].forEach(dx => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, height, 0.1), railMat);
+    rail.position.set(cx+dx, midY, cz); group.add(rail);
+  });
+  const rungs = Math.floor(height/0.55);
+  for (let i=1; i<rungs; i++){
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.72,0.08,0.08), railMat);
+    rung.position.set(cx, baseY + i*0.55, cz); group.add(rung);
+  }
+}
+
+// ── Build meshes for a generated level ──────────────────────────────────────
+let levelGroup = null, finishLight = null;
+function buildLevelMeshes(L){
+  if (levelGroup){ gameScene.remove(levelGroup); disposeGroup(levelGroup); }
+  levelGroup = new THREE.Group();
+  gameScene.add(levelGroup);
+
+  const hex = LEVELS[L.idx].hex;
+  const tex = blockTexture(hex);
+  const metal = isMetal(L.idx);
+
+  L.blocks.forEach(b => {
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex, roughness: metal?0.3:0.85, metalness: metal?0.7:0.05,
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.size, b.size, b.size), mat);
+    mesh.position.set(b.x, b.top - b.size/2, b.z);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    levelGroup.add(mesh);
+
+    if (b.isStart){
+      const s = textSprite(L.level===1 ? 'START' : 'LEVEL '+L.level, '#f9e04b');
+      s.position.set(b.x, b.top+1.3, b.z); levelGroup.add(s);
+      // the tower you climbed up out of, descending below the start pad
+      buildTower(levelGroup, b.x, b.z, b.top - TOWER_H, TOWER_H, hex);
+    }
+    if (b.requiresDouble){
+      // marker so players know a double jump is needed
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.42, 0.07, 8, 20),
+        new THREE.MeshBasicMaterial({ color: 0xf9e04b })
+      );
+      ring.rotation.x = Math.PI/2; ring.position.set(b.x, b.top+0.08, b.z);
+      levelGroup.add(ring);
+    }
+    if (b.isFinish){
+      buildTower(levelGroup, b.x, b.z, b.top, TOWER_H, hex);
+      const ladderTopY = b.top + TOWER_H;
+      const isLast = (L.level === TOTAL_LEVELS);
+      const ban = textSprite(isLast ? '🏆' : '🍌', '#fff');
+      ban.position.set(b.x, ladderTopY+1.4, b.z); ban.scale.set(2,2,1); levelGroup.add(ban);
+      const climbLbl = textSprite('CLIMB ↑', '#f9e04b');
+      climbLbl.position.set(b.x, b.top+0.9, b.z); climbLbl.scale.set(2.4,1.2,1); levelGroup.add(climbLbl);
+      // beacon column rising from the top of the tower
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5,0.5,40,12,1,true),
+        new THREE.MeshBasicMaterial({ color: shade(hex,0.4), transparent:true, opacity:0.28, side:THREE.DoubleSide, depthWrite:false })
+      );
+      beam.position.set(b.x, ladderTopY+20, b.z); levelGroup.add(beam);
+      finishLight = new THREE.PointLight(parseInt(hex.slice(1),16), 1.6, 18);
+      finishLight.position.set(b.x, ladderTopY+1, b.z); levelGroup.add(finishLight);
+    }
+  });
+
+  // floating clouds for depth
+  for (let i=0;i<10;i++){
+    const cl = new THREE.Mesh(
+      new THREE.BoxGeometry(4+Math.random()*5, 1.2, 3+Math.random()*4),
+      new THREE.MeshStandardMaterial({ color:0xffffff, roughness:1, transparent:true, opacity:0.55 })
+    );
+    cl.position.set((Math.random()-0.5)*120, L.voidY + 2 + Math.random()*30, (Math.random()-0.5)*120 + L.blocks[L.blocks.length-1].z/2);
+    levelGroup.add(cl);
+  }
+
+  gameScene.background = makeSky(hex);
+  gameScene.fog = new THREE.Fog(parseInt(mix('#bcd6ee', hex, 0.14).slice(1),16), 60, 220);
+}
+function disposeGroup(g){
+  g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GAME STATE & INPUT
+// ════════════════════════════════════════════════════════════════════════════
+let state = 'menu';              // menu | char | select | play
+let curLevel = null;             // generated level object
+let camMode = 'third';           // third | first
+let camPitch = save.camPitch;    // third-person camera angle (radians)
+
+// player kinematics
+const pos = new THREE.Vector3();
+let vx=0, vy=0, vz=0, yaw=0, grounded=false, jumpsUsed=0;
+let standingIndex = 0, attempts = 0, levelTime = 0, levelTimerRunning = false;
+let failing = false, cleared = false, climbing = false, transitioning = false, respawnAt = 0;
+
+const keys = {};
+const camPos = new THREE.Vector3();
+const camLook = new THREE.Vector3();
+
+window.addEventListener('keydown', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  if (state !== 'play') return;
+  const k = e.key.toLowerCase();
+  if (e.repeat){ keys[k]=true; return; }
+  keys[k] = true;
+  if (e.key === ' ') tryJump();
+  if (k === 'c') toggleCam();
+  if (k === 'r') startLevel(curLevel.level);
+  if (e.key === 'Escape') gotoSelect();
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = false;
+  if (k === '[' || k === ']'){ save.camPitch = camPitch; persist(); }  // remember preference
+});
+
+function tryJump(){
+  if (failing || cleared) return;
+  if (grounded){ vy = JUMP_V; grounded=false; jumpsUsed=1; }
+  else if (curLevel.canDouble && jumpsUsed < 2){ vy = DJUMP_V; jumpsUsed=2; }
+}
+function toggleCam(){
+  camMode = (camMode === 'third') ? 'first' : 'third';
+  player.group.visible = (camMode === 'third');
+}
+
+// ── Start / restart a level ────────────────────────────────────────────────
+function startLevel(level, origin){
+  curLevel = generateLevel(level, origin);
+  buildLevelMeshes(curLevel);
+  refreshCharacters();
+  player.group.visible = (camMode === 'third');
+
+  const s = curLevel.blocks[0], n = curLevel.blocks[1];
+  pos.set(s.x, s.top, s.z);
+  vx=vy=vz=0; grounded=true; jumpsUsed=0; standingIndex=0;
+  yaw = Math.atan2(n.x - s.x, n.z - s.z);   // face first jump
+  attempts = 0; levelTime = 0; levelTimerRunning = false;
+  failing=false; cleared=false; climbing=false;
+
+  placeCamera(true);   // snap camera behind immediately
+
+  state = 'play';
+  hideBanner();
+  showScreen(null);
+  document.getElementById('hud').classList.add('active');
+  document.getElementById('controls-hint').classList.add('active');
+  updateHud();
+}
+function respawn(){
+  const s = curLevel.blocks[0], n = curLevel.blocks[1];
+  pos.set(s.x, s.top, s.z);
+  vx=vy=vz=0; grounded=true; jumpsUsed=0; standingIndex=0;
+  yaw = Math.atan2(n.x - s.x, n.z - s.z);
+  failing=false;
+  placeCamera(true);
+}
+
+// ── Physics step ────────────────────────────────────────────────────────────
+function stepPlayer(dt){
+  if (transitioning) return;
+  if (failing){
+    // keep falling visually until respawn timer
+    vy -= GRAVITY*dt; pos.y += vy*dt;
+    if (performance.now() >= respawnAt) respawn();
+    return;
+  }
+
+  // camera pitch ([ lower / ] higher) — third person only
+  if (camMode === 'third'){
+    let pd = (keys[']']?1:0) - (keys['[']?1:0);
+    if (pd){ camPitch = clamp(camPitch + pd*PITCH_RATE*dt, PITCH_MIN, PITCH_MAX); showCamToast(); }
+  }
+
+  // turn
+  if (keys['arrowleft']||keys['a'])  yaw -= TURN_SPEED*dt;
+  if (keys['arrowright']||keys['d']) yaw += TURN_SPEED*dt;
+
+  const up = keys['arrowup']||keys['w'], down = keys['arrowdown']||keys['s'];
+
+  // ── Climb the finish ladder once the level is cleared ──
+  if (cleared){
+    const dxz = Math.hypot(pos.x - curLevel.finish.x, pos.z - curLevel.finish.z);
+    if (dxz < curLevel.climbR && pos.y >= curLevel.finish.top - 0.3){
+      climbing = true;
+      pos.x = lerp(pos.x, curLevel.finish.x, 0.3);   // snap onto the ladder
+      pos.z = lerp(pos.z, curLevel.finish.z, 0.3);
+      const vdir = (up?1:0) - (down?1:0);
+      pos.y = clamp(pos.y + vdir*CLIMB_SPEED*dt, curLevel.finish.top, curLevel.ladderTopY);
+      vx = vy = vz = 0;
+      if (pos.y >= curLevel.ladderTopY - 0.02) ascendToNext();
+      return;
+    }
+    climbing = false;
+    if (pos.y < curLevel.finish.top - 4){       // safety: don't let a cleared run fall away
+      pos.set(curLevel.finish.x, curLevel.finish.top, curLevel.finish.z); vx=vy=vz=0; return;
+    }
+  }
+
+  const fwd = (up?1:0) - (down?1:0);
+  const sin = Math.sin(yaw), cos = Math.cos(yaw);
+  vx = sin * fwd * MOVE_SPEED;
+  vz = cos * fwd * MOVE_SPEED;
+
+  if (levelTimerRunning) levelTime += dt;
+  else if (fwd !== 0 || !grounded) levelTimerRunning = true;
+
+  // horizontal move
+  pos.x += vx*dt; pos.z += vz*dt;
+
+  // vertical (swept against block tops)
+  const prevY = pos.y;
+  vy -= GRAVITY*dt;
+  pos.y += vy*dt;
+
+  grounded = false;
+  for (let i=0;i<curLevel.blocks.length;i++){
+    const b = curLevel.blocks[i];
+    const half = b.size/2;
+    if (Math.abs(pos.x-b.x) < PFR+half && Math.abs(pos.z-b.z) < PFR+half){
+      if (vy <= 0 && prevY >= b.top - 0.02 && pos.y <= b.top + 0.02){
+        pos.y = b.top; vy = 0; grounded = true; jumpsUsed = 0; standingIndex = i;
+        if (b.isFinish) clearLevel();
+      }
+    }
+  }
+
+  if (!cleared && pos.y < curLevel.voidY) fail();
+}
+function fail(){
+  if (failing) return;
+  failing = true; attempts++; updateHud();
+  respawnAt = performance.now() + 650;
+  const fl = document.getElementById('flash');
+  fl.classList.add('show'); setTimeout(()=>fl.classList.remove('show'), 280);
+  showBanner('You fell!', '#ff6b6b', 'Restarting…');
+  setTimeout(hideBanner, 600);
+}
+function clearLevel(){
+  if (cleared) return;
+  cleared = true;
+  const lvl = curLevel.level, idx = curLevel.idx, L = LEVELS[idx];
+  // award armour + unlock next + best time
+  save.armour[idx] = true;
+  if (lvl < TOTAL_LEVELS && save.unlocked < lvl+1) save.unlocked = lvl+1;
+  if (!save.best[idx] || levelTime < save.best[idx]) save.best[idx] = levelTime;
+  if (!save.equipped) save.equipped = lvl;     // auto-wear first armour earned
+  persist();
+  refreshCharacters();                          // wear it right away if it's the first
+  showBanner('LEVEL '+lvl+' CLEARED!', '#f9e04b',
+    '🛡 '+L.name+' armour earned — climb the ladder ↑');
+}
+
+// Climb the tower at the top of the ladder → next level (stacked directly above)
+function ascendToNext(){
+  if (transitioning) return;
+  if (curLevel.level >= TOTAL_LEVELS){ showComplete(TOTAL_LEVELS); return; }
+  transitioning = true;
+  const nextLevel = curLevel.level + 1;
+  const origin = { x: curLevel.finish.x, y: curLevel.ladderTopY, z: curLevel.finish.z };
+  fade(1, () => {
+    startLevel(nextLevel, origin);   // its start pad sits at the ladder top → seamless
+    transitioning = false;
+    fade(0);
+  });
+}
+function fade(to, cb){
+  const f = document.getElementById('fade');
+  f.style.opacity = to;
+  if (cb) setTimeout(cb, 360);
+}
+let camToastTimer = 0;
+function showCamToast(){
+  const el = document.getElementById('cam-toast');
+  el.textContent = 'Camera angle ' + Math.round(camPitch*180/Math.PI) + '°';
+  el.classList.add('show');
+  clearTimeout(camToastTimer);
+  camToastTimer = setTimeout(() => el.classList.remove('show'), 800);
+}
+
+// ── Camera placement ────────────────────────────────────────────────────────
+function placeCamera(instant){
+  const sin = Math.sin(yaw), cos = Math.cos(yaw);
+  let tx,ty,tz, lx,ly,lz;
+  if (camMode === 'third'){
+    const ch = Math.cos(camPitch)*CAM_BOOM, cv = Math.sin(camPitch)*CAM_BOOM;
+    tx = pos.x - sin*ch;  ty = pos.y + 0.9 + cv; tz = pos.z - cos*ch;
+    lx = pos.x + sin*1.5; ly = pos.y + 0.8;      lz = pos.z + cos*1.5;
+  } else {
+    tx = pos.x + sin*0.05; ty = pos.y + EYE; tz = pos.z + cos*0.05;
+    lx = pos.x + sin*10;   ly = pos.y + EYE - 0.5; lz = pos.z + cos*10;
+  }
+  if (instant){ camPos.set(tx,ty,tz); camLook.set(lx,ly,lz); }
+  else {
+    const s = camMode==='first' ? 1 : 0.18;
+    camPos.lerp(new THREE.Vector3(tx,ty,tz), s);
+    camLook.lerp(new THREE.Vector3(lx,ly,lz), camMode==='first'?1:0.25);
+  }
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UI WIRING
+// ════════════════════════════════════════════════════════════════════════════
+const screens = {
+  menu: document.getElementById('menu'),
+  select: document.getElementById('select'),
+  char: document.getElementById('char'),
+  complete: document.getElementById('complete'),
+};
+function showScreen(name){
+  Object.values(screens).forEach(s => s.classList.remove('active'));
+  document.getElementById('hud').classList.remove('active');
+  document.getElementById('controls-hint').classList.remove('active');
+  if (name && screens[name]) screens[name].classList.add('active');
+}
+function gotoMenu(){ state='menu'; showScreen('menu'); }
+function gotoSelect(){ state='select'; buildLevelGrid(); showScreen('select'); }
+function gotoChar(){ state='char'; buildCharScreen(); showScreen('char'); }
+
+function buildLevelGrid(){
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const lvl = i+1;
+    const unlocked = lvl <= save.unlocked;
+    const done = save.armour[i];
+    const el = document.createElement('div');
+    el.className = 'lvl' + (unlocked ? '' : ' locked');
+    el.style.background = L.hex;
+    el.innerHTML =
+      '<div class="num">'+lvl+'</div>' +
+      '<div class="nm">'+L.name+'</div>' +
+      (save.best[i] ? '<div class="best">⏱ '+save.best[i].toFixed(1)+'s</div>' : '') +
+      (done ? '<div class="check">✓</div>' : '') +
+      (unlocked ? '' : '<div class="lock">🔒</div>');
+    if (unlocked) el.onclick = () => startLevel(lvl);
+    grid.appendChild(el);
+  });
+}
+
+const BODY_COLORS = ['#5ec8f0','#e03b2f','#f4d03f','#7ed957','#b07ff0','#f47ab5','#ee7a1e','#2b59c3','#2e8b3d','#f2f2f2','#262626','#6b6b6b'];
+function buildCharScreen(){
+  // body swatches
+  const bs = document.getElementById('body-swatches');
+  bs.innerHTML = '';
+  BODY_COLORS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'sw' + (c.toLowerCase()===save.color.toLowerCase() ? ' sel' : '');
+    d.style.background = c;
+    d.onclick = () => { save.color = c; persist(); refreshCharacters(); buildCharScreen(); };
+    bs.appendChild(d);
+  });
+  document.getElementById('custom-color').value = /^#[0-9a-f]{6}$/i.test(save.color) ? save.color : '#5ec8f0';
+
+  // armour swatches (None + earned)
+  const as = document.getElementById('armour-swatches');
+  as.innerHTML = '';
+  const none = document.createElement('div');
+  none.className = 'sw none' + (save.equipped===0 ? ' sel' : '');
+  none.textContent = 'None';
+  none.onclick = () => { save.equipped=0; persist(); refreshCharacters(); buildCharScreen(); };
+  as.appendChild(none);
+  LEVELS.forEach((L,i) => {
+    if (!save.armour[i]) return;
+    const d = document.createElement('div');
+    d.className = 'sw' + (save.equipped===i+1 ? ' sel' : '');
+    d.style.background = L.hex; d.title = L.name + ' armour';
+    if (isMetal(i)) d.style.boxShadow = 'inset 0 0 8px rgba(255,255,255,0.6)';
+    d.onclick = () => { save.equipped=i+1; persist(); refreshCharacters(); buildCharScreen(); };
+    as.appendChild(d);
+  });
+  if (as.children.length === 1){
+    const note = document.createElement('div');
+    note.className = 'hint'; note.style.marginTop='6px';
+    note.textContent = 'Clear levels to earn armour!';
+    as.appendChild(note);
+  }
+}
+
+function updateHud(){
+  document.getElementById('hud-level').textContent = curLevel.level;
+  document.getElementById('hud-name').textContent = LEVELS[curLevel.idx].name;
+  document.getElementById('hud-swatch').style.background = LEVELS[curLevel.idx].hex;
+  document.getElementById('hud-attempts').textContent = attempts;
+}
+function showBanner(big, color, sub){
+  const b = document.getElementById('banner');
+  b.innerHTML = '<div class="big" style="color:'+color+'">'+big+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'');
+  b.classList.add('active');
+}
+function hideBanner(){ document.getElementById('banner').classList.remove('active'); }
+
+function showComplete(lvl){
+  hideBanner();
+  const idx = lvl-1, L = LEVELS[idx];
+  document.getElementById('hud').classList.remove('active');
+  document.getElementById('controls-hint').classList.remove('active');
+  const isWin = (lvl === TOTAL_LEVELS);
+  document.getElementById('complete-title').textContent = isWin ? '🏆 ALL 20 CLEARED!' : 'Level Complete!';
+  const ic = document.getElementById('complete-armour');
+  ic.style.color = L.hex; ic.style.background = mix('#1a1a22', L.hex, 0.25);
+  ic.textContent = isMetal(idx) ? '🏅' : '🛡';
+  document.getElementById('complete-msg').innerHTML =
+    isWin ? 'You earned <b style="color:'+L.hex+'">Gold</b> armour and beat every level!'
+          : 'You earned <b style="color:'+L.hex+'">'+L.name+'</b> armour!';
+  const best = save.best[idx];
+  document.getElementById('complete-time').innerHTML =
+    'Time: '+levelTime.toFixed(1)+'s'+(best && best<=levelTime+0.001 ? ' &nbsp;·&nbsp; <span style="color:#f9e04b">Best!</span>' : '');
+  document.getElementById('btn-next').style.display = isWin ? 'none' : '';
+  state='complete'; showScreen('complete');
+}
+
+// buttons
+document.getElementById('btn-play').onclick = gotoSelect;
+document.getElementById('btn-char').onclick = gotoChar;
+document.getElementById('btn-back-menu').onclick = gotoMenu;
+document.getElementById('btn-char-back').onclick = gotoMenu;
+document.getElementById('custom-color').oninput = (e) => {
+  save.color = e.target.value; persist(); refreshCharacters();
+  document.querySelectorAll('#body-swatches .sw').forEach(s=>s.classList.remove('sel'));
+};
+document.getElementById('hud-cam').onclick = toggleCam;
+document.getElementById('hud-restart').onclick = () => startLevel(curLevel.level);
+document.getElementById('hud-exit').onclick = gotoSelect;
+document.getElementById('btn-next').onclick = () => startLevel(Math.min(curLevel.level+1, TOTAL_LEVELS));
+document.getElementById('btn-replay').onclick = () => startLevel(curLevel.level);
+document.getElementById('btn-levels').onclick = gotoSelect;
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ════════════════════════════════════════════════════════════════════════════
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+let last = performance.now();
+let menuSpin = 0;
+function loop(now){
+  const dt = Math.min((now - last)/1000, 0.033);
+  last = now;
+
+  if (state === 'play'){
+    stepPlayer(dt);
+    player.group.position.set(pos.x, pos.y, pos.z);
+    player.group.rotation.y = yaw;
+    placeCamera(false);
+    // sun follows player for crisp shadows
+    gSun.position.set(pos.x + 16, pos.y + 28, pos.z + 10);
+    gSun.target.position.set(pos.x, pos.y, pos.z);
+    if (finishLight) finishLight.intensity = 1.2 + Math.sin(now*0.005)*0.6;
+    // HUD live
+    document.getElementById('hud-progress').textContent = standingIndex + '/' + curLevel.numJumps;
+    document.getElementById('hud-time').textContent = levelTime.toFixed(1);
+    renderer.render(gameScene, camera);
+  } else {
+    // menu / char / select / complete → preview character
+    menuSpin += dt*0.6;
+    menuChar.group.rotation.y = menuSpin;
+    menuChar.group.position.y = 0.02*Math.sin(now*0.002);
+    camera.position.set(Math.sin(menuSpin*0.15)*0.6, 1.7, 5.2);
+    camera.lookAt(0, 0.9, 0);
+    renderer.render(menuScene, camera);
+  }
+  requestAnimationFrame(loop);
+}
+
+// ── boot ────────────────────────────────────────────────────────────────────
+resize();
+refreshCharacters();
+gotoMenu();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
