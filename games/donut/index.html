@@ -15,10 +15,10 @@
     min-height: 100vh;
     font-family: 'Segoe UI', sans-serif;
     color: #fff;
-    overflow: hidden;
+    overflow-x: hidden;
   }
   #title {
-    font-size: 2em;
+    font-size: clamp(1.2em, 5vw, 2em);
     font-weight: bold;
     color: #f4a43a;
     text-shadow: 0 0 20px #f4a43a88;
@@ -27,23 +27,28 @@
   }
   #hud {
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    gap: 10px 20px;
     align-items: center;
+    justify-content: center;
     margin-bottom: 10px;
     background: rgba(0,0,0,0.5);
     padding: 8px 20px;
     border-radius: 30px;
     border: 1px solid #f4a43a44;
+    max-width: min(900px, 100vw - 16px);
   }
-  .hud-item { display: flex; align-items: center; gap: 6px; font-size: 1em; font-weight: bold; }
+  .hud-item { display: flex; align-items: center; gap: 6px; font-size: clamp(0.75em, 3vw, 1em); font-weight: bold; }
   .hud-item span { color: #f4d03f; }
   #game-container {
     position: relative;
-    width: 900px;
-    height: 600px;
+    width: min(900px, 100vw);
+    aspect-ratio: 3 / 2;
   }
   canvas {
     display: block;
+    width: 100%;
+    height: 100%;
   }
   .base-label {
     position: absolute;
@@ -157,7 +162,7 @@
     background: rgba(0,0,0,0.5);
     border-radius: 12px;
     padding: 8px 16px;
-    width: 900px;
+    width: min(900px, 100vw);
     max-height: 80px;
     overflow-y: auto;
     font-size: 0.82em;
@@ -168,7 +173,29 @@
   #log p.good { color: #7dff7d; }
   #log p.bad { color: #ff7d7d; }
   #log p.info { color: #7dbfff; }
-  #btns { margin-top: 10px; display: flex; gap: 12px; }
+  #btns { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .game-btn { padding: 10px 18px; font-size: clamp(0.8em, 3.5vw, 1em); }
+  #boss-bar-wrap { width: min(900px, 100vw); }
+  #instructions-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+    z-index: 300; align-items: center; justify-content: center; padding: 16px;
+  }
+  #instructions-overlay.show { display: flex; }
+  #instructions-box {
+    background: #1e0c00; border: 3px solid #f4a43a; border-radius: 20px;
+    padding: 28px 28px 22px; max-width: 480px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+  }
+  #instructions-box h2 { text-align: center; color: #f4a43a; font-size: 1.5em; margin-bottom: 18px; }
+  .instr-block { margin-bottom: 16px; }
+  .instr-block h3 { color: #f4d03f; font-size: 1em; margin-bottom: 4px; }
+  .instr-block p { color: #ccc; font-size: 0.88em; line-height: 1.5; }
+  #instructions-box button {
+    display: block; margin: 8px auto 0; background: #f4a43a; color: #000;
+    border: none; border-radius: 12px; padding: 12px 36px;
+    font-size: 1.1em; font-weight: bold; cursor: pointer;
+  }
+  #instructions-box button:hover { background: #f4d03f; }
   .game-btn {
     background: #f4a43a; color: #000; border: none; border-radius: 10px;
     padding: 10px 24px; font-weight: bold; font-size: 1em; cursor: pointer;
@@ -230,7 +257,7 @@
 </head>
 <body>
 <div id="title">🍩 DONUT <span onclick="godCheat()" style="cursor:pointer;user-select:none">G</span>AME 3D 🍩</div>
-<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v1.9</div>
+<div style="text-align:center;color:#f4a43a88;font-size:0.75em;margin-top:-6px;margin-bottom:4px;letter-spacing:0.05em;">by Noah and Matt Sperrin &nbsp;·&nbsp; v2.0</div>
 <div id="hud">
   <div class="hud-item">💰 Coins: <span id="hud-coins">30</span></div>
   <div class="hud-item" onclick="toggleWaveToast(event)" style="cursor:pointer;user-select:none">🌊 Wave: <span id="hud-wave">0</span></div>
@@ -265,6 +292,32 @@
 </div>
 <div id="donut-toast"></div>
 <div id="wave-toast"></div>
+<div id="instructions-overlay" class="show">
+  <div id="instructions-box">
+    <h2>🍩 How to Play</h2>
+    <div class="instr-block">
+      <h3>🏪 Buy your donuts</h3>
+      <p>Open the <strong>Shop</strong> before each wave to buy donut warriors. Each type has different strength, range and speed. You can have up to 20 on your team.</p>
+    </div>
+    <div class="instr-block">
+      <h3>👆 Move your donuts</h3>
+      <p>Tap a donut to select it (it glows), then tap anywhere on the arena to send it there. Drag a box across multiple donuts to select them all, then tap to move the group.</p>
+    </div>
+    <div class="instr-block">
+      <h3>🛡️ Defend → ⚔️ Attack → ☠️ Boss</h3>
+      <p>Waves alternate: first <strong>defend</strong> your base from attackers, then <strong>attack</strong> the enemy base. Every <strong>10th wave is a Boss</strong> — much tougher. Survive all 30 waves to win!</p>
+    </div>
+    <div class="instr-block">
+      <h3>💰 Sell &amp; upgrade</h3>
+      <p>In the Shop you can <strong>sell</strong> weaker donuts for 75% of their cost and reinvest in stronger ones. If you run out of donuts <em>and</em> coins it's game over!</p>
+    </div>
+    <div class="instr-block">
+      <h3>💖 Lives</h3>
+      <p>You have 3 lives. Lose a wave and the wave replays — lose all 3 and it's game over.</p>
+    </div>
+    <button onclick="document.getElementById('instructions-overlay').classList.remove('show')">Let's play! 🍩</button>
+  </div>
+</div>
 <canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:90;display:none;"></canvas>
 <div id="log"></div>
 <div id="btns">
@@ -387,6 +440,7 @@ camera.aspect=1.5;camera.updateProjectionMatrix();
 
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setSize(900,600);
+canvas.style.width='100%';canvas.style.height='100%';
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 
@@ -568,8 +622,8 @@ const raycaster=new THREE.Raycaster();
 const _floorPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 function getFloorPoint(clientX,clientY){
   const rect=canvas.getBoundingClientRect();
-  const mx=((clientX-rect.left)/900)*2-1;
-  const my=-((clientY-rect.top)/600)*2+1;
+  const mx=((clientX-rect.left)/rect.width)*2-1;
+  const my=-((clientY-rect.top)/rect.height)*2+1;
   raycaster.setFromCamera(new THREE.Vector2(mx,my),camera);
   const tgt=new THREE.Vector3();
   if(!raycaster.ray.intersectPlane(_floorPlane,tgt))return null;
@@ -578,7 +632,7 @@ function getFloorPoint(clientX,clientY){
 function project2D(gx,gy){
   const v=new THREE.Vector3(gx-CX,0,gy-CY);
   v.project(camera);
-  return{x:(v.x+1)/2*900,y:(-v.y+1)/2*600};
+  const r=canvas.getBoundingClientRect();return{x:(v.x+1)/2*r.width,y:(-v.y+1)/2*r.height};
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -811,6 +865,12 @@ canvas.addEventListener('click',e=>{
   }
 });
 canvas.addEventListener('contextmenu',e=>{e.preventDefault();state.selectedDonuts=[];});
+// Touch → mouse forwarding for canvas interactions
+let _touching=false;
+function _fwd(type,t,extra={}){canvas.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,clientX:t.clientX,clientY:t.clientY,...extra}));}
+canvas.addEventListener('touchstart',e=>{e.preventDefault();_touching=true;_fwd('mousedown',e.touches[0],{buttons:1});},{passive:false});
+canvas.addEventListener('touchmove',e=>{e.preventDefault();if(_touching)_fwd('mousemove',e.touches[0],{buttons:1});},{passive:false});
+canvas.addEventListener('touchend',e=>{e.preventDefault();_touching=false;const t=e.changedTouches[0];_fwd('mouseup',t);_fwd('click',t);},{passive:false});
 
 // ── Waves ─────────────────────────────────────────────────────────────────────
 function mkEnemies(wave,waveType){
